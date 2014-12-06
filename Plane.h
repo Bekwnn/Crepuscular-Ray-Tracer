@@ -19,7 +19,7 @@ public:
 	double getDistance() { return distance; }
 	Color getColor() { return color; }
 	
-	Vect getNormalAt(Vect point) {
+	virtual Vect getNormalAt(Vect point) {
 		return normal;
 	}
 	

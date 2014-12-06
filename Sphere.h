@@ -21,7 +21,7 @@ public:
 	double getRadius() { return radius; }
 	Color getColor() { return color; }
 	
-	Vect getNormalAt(Vect point) {
+	virtual Vect getNormalAt(Vect point) {
 		Vect normal = (point - center).normalized();
 		return normal;
 	}

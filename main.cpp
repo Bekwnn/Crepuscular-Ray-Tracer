@@ -15,6 +15,7 @@
 #include "Vect.h"
 #include "Color.h"
 #include "Light.h"
+#include "PointLight.h"
 #include "Object.h"
 #include "Sphere.h"
 #include "Plane.h"
@@ -67,6 +68,66 @@ int RenderedObjectIndex(vector<double> object_intersections) {
 		}
 		return index_of_min;
 	}
+}
+
+/* gets the color at an intersection */
+Color getColorAt(Vect intersection_position, Vect intersecting_ray_direction,
+				 vector<Object*> scene_graph, int index_of_rendered_object,
+				 vector<Light*> scene_lights, double rounderror, double ambientlight)
+{
+	Color rendered_object_color = scene_graph.at(index_of_rendered_object)->getColor();
+	Vect rendered_object_normal = scene_graph.at(index_of_rendered_object)->getNormalAt(intersection_position);
+	
+	Color final_color = rendered_object_color * ambientlight;
+	
+	for (int i = 0; i < scene_lights.size(); i++) {
+		Vect light_direction = (scene_lights.at(i)->getPosition() - intersection_position).normalized();
+		
+		double cos_angle = rendered_object_normal.normalized().dot(light_direction.normalized());
+		
+		if (cos_angle > 0) {
+			bool shadowed = false;
+			
+			double distance_to_light = (scene_lights.at(i)->getPosition() - intersection_position).normalized().magnitude();
+			
+			Ray shadow_feeler(intersection_position, (scene_lights.at(i)->getPosition() - intersection_position).normalized());
+			
+			vector<double> secondary_intersections;
+			
+			for (int j = 0; j < scene_graph.size(); j++) {
+				secondary_intersections.push_back(scene_graph.at(j)->findIntersection(shadow_feeler));
+			}
+			
+			for (int k = 0; k < secondary_intersections.size(); k++) {
+				if (secondary_intersections.at(k) > rounderror) {
+					if (secondary_intersections.at(k) <= distance_to_light) {
+						shadowed = true;
+					}
+					break;
+				}
+			}
+			
+			if (!shadowed) {
+				final_color += (rendered_object_color * scene_lights.at(i)->getColor() * cos_angle);
+			
+				if (rendered_object_color.special() <= 1) {
+					double dot1 = rendered_object_normal.dot(-intersecting_ray_direction);
+					Vect scalar1 = rendered_object_normal * dot1;
+					Vect add1 = scalar1 + intersecting_ray_direction;
+					Vect scalar2 = add1 * 2;
+					Vect add2 = scalar2 - intersecting_ray_direction;
+					Vect reflection_direction = add2.normalized();
+					
+					double specular = reflection_direction.dot(light_direction);
+					if (specular > 0) {
+						specular = pow(specular, 10);
+						final_color = final_color + (scene_lights.at(i)->getColor() * specular * rendered_object_color.special());
+					}
+				}
+			}
+		}
+	}
+	return final_color.clip();
 }
 
 /* saves a bitmap */
@@ -128,6 +189,8 @@ int main(int args, char *argv[]) {
 	RGBType *pixels = new RGBType[pixelcount];
 	
 	double aspectratio = (double)width/height;
+	double ambientlight = 0.2;
+	double rounderror = 0.000001;
 	
 	//establishing base vectors
 	Vect O(0, 0, 0);
@@ -151,7 +214,14 @@ int main(int args, char *argv[]) {
 	
 	//set up scene light(s):
 	Vect light_position(-7, 10, -10);
-	Light scene_light(light_position, white);
+	PointLight scene_light(light_position, white);
+	//Vect light_position2(7, 10, -10);
+	//PointLight scene_light2(light_position2, white);
+	
+	//push lights to a light source vector:
+	vector<Light*> scene_lights;
+	scene_lights.push_back(dynamic_cast<Light*>(&scene_light));
+	//scene_lights.push_back(dynamic_cast<Light*>(&scene_light2));
 	
 	//scene objects:
 	Sphere sphere(O, 1, Color(0.2, 0.8, 0.2, 0));
@@ -208,15 +278,26 @@ int main(int args, char *argv[]) {
 			}
 			else {
 				//get intersected object color
-				Color returnColor = scene_graph.at(index_of_rendered_object)->getColor();
-				pixels[curpixel].r = returnColor.red();
-				pixels[curpixel].g = returnColor.green();
-				pixels[curpixel].b = returnColor.blue();
+				if (intersections.at(index_of_rendered_object) > rounderror) {
+				
+					Vect intersection_position = cam_ray_origin +
+						(cam_ray_direction * intersections.at(index_of_rendered_object));
+					Vect intersecting_ray_direction = cam_ray_direction;
+					
+					Color intersection_color = getColorAt(
+						intersection_position, intersecting_ray_direction,
+						scene_graph, index_of_rendered_object, scene_lights,
+						rounderror, ambientlight);
+					
+					pixels[curpixel].r = intersection_color.red();
+					pixels[curpixel].g = intersection_color.green();
+					pixels[curpixel].b = intersection_color.blue();
+				}
 			}
 		}
 	}
 	
-	savebmp("scene.bmp", width, height, dpi, pixels);
+	savebmp("trace.bmp", width, height, dpi, pixels);
 	
 	return 0;
 }
