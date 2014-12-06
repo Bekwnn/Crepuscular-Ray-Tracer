@@ -108,7 +108,7 @@ Color getColorAt(Vect intersection_position, Vect intersecting_ray_direction,
 			}
 			
 			if (!shadowed) {
-				final_color += (rendered_object_color * scene_lights.at(i)->getColor() * cos_angle);
+					final_color = final_color + ((rendered_object_color * scene_lights.at(i)->getColor()) * cos_angle); 
 			
 				if (rendered_object_color.special() <= 1) {
 					double dot1 = rendered_object_normal.dot(-intersecting_ray_direction);
@@ -224,7 +224,7 @@ int main(int args, char *argv[]) {
 	//scene_lights.push_back(dynamic_cast<Light*>(&scene_light2));
 	
 	//scene objects:
-	Sphere sphere(O, 1, Color(0.2, 0.8, 0.2, 0));
+	Sphere sphere(O, 1, Color(0.9, 0.6, 0.1, 0));
 	Plane scene_plane(Y, -1, Color(0.6, 0.1, 0.3, 0));
 	
 	//push scene objects to scene graph:

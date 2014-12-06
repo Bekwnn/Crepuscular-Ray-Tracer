@@ -24,25 +24,24 @@ public:
 		return (r + g + b)/3;
 	}
 	
-	Color clip() {
-		double alllight = r + g + b;
-		double excesslight = alllight - 3;
-		if (excesslight > 0) {
-			r = r + excesslight*(r/alllight);
-			g = g + excesslight*(g/alllight);
-			b = b + excesslight*(b/alllight);
-		}
-		
-		if (r > 1) { r = 1; }
-		if (g > 1) { g = 1; }
-		if (b > 1) { b = 1; }
-		
-		if (r < 0) { r = 0; }
-		if (g < 0) { g = 0; }
-		if (b < 0) { b = 0; }
-		
-		return Color(r, g, b, s);
-	}
+		Color clip() {
+			double alllight = r + g + b;
+			double excesslight = alllight - 3;
+			
+			if (excesslight > 0) {
+				r = r + excesslight*(r/alllight);
+				g = g + excesslight*(g/alllight);
+				b = b + excesslight*(b/alllight);
+			}
+			
+			if (r > 1) {r = 1;}
+			if (g > 1) {g = 1;}
+			if (b > 1) {b = 1;}
+			if (r < 0) {r = 0;}
+			if (g < 0) {g = 0;}
+			if (b < 0) {b = 0;}
+			return Color (r, g, b, s);
+		} 
 	
 	// Operators:
 	inline Color operator +(const Color &c) const {
@@ -101,7 +100,7 @@ Color::Color () {
 	s = 0.0;
 }
 
-Color::Color (double red, double blue, double green, double special) {
+Color::Color (double red, double green, double blue, double special) {
 	r = red;
 	g = green;
 	b = blue;
