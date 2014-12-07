@@ -16,6 +16,7 @@
 #include "Color.h"
 #include "Light.h"
 #include "PointLight.h"
+#include "DirectionalLight.h"
 #include "Object.h"
 #include "Sphere.h"
 #include "Plane.h"
@@ -78,19 +79,68 @@ Color getColorAt(Vect intersection_position, Vect intersecting_ray_direction,
 	Color rendered_object_color = scene_graph.at(index_of_rendered_object)->getColor();
 	Vect rendered_object_normal = scene_graph.at(index_of_rendered_object)->getNormalAt(intersection_position);
 	
+	if (rendered_object_color.special() == 2) {
+		//checkered pattern
+		
+		int square = floor(intersection_position.vx()) + floor(intersection_position.vz());
+		if (square % 2 == 0) {
+			//darker tile
+			rendered_object_color *= 0.5;
+		}
+		else {
+			//do nothing
+		}
+	}
+	
 	Color final_color = rendered_object_color * ambientlight;
 	
+	//special value of (0-1] for reflection:
+	if (rendered_object_color.special() > 0 && rendered_object_color.special() <= 1) {
+		//reflection of objects with specular:
+		double dot1 = rendered_object_normal.dot(-intersecting_ray_direction);
+		Vect scalar1 = rendered_object_normal * dot1;
+		Vect add1 = scalar1 + intersecting_ray_direction;
+		Vect scalar2 = add1 * 2;
+		Vect add2 = scalar2 - intersecting_ray_direction;
+		Vect reflection_direction = add2.normalized();
+		
+		Ray reflection_feeler(intersection_position, reflection_direction);
+		
+		vector<double> reflection_intersections;
+		
+		for (int i = 0; i < scene_graph.size(); i++) {
+			reflection_intersections.push_back(scene_graph.at(i)->findIntersection(reflection_feeler));
+		}
+		
+		int index_of_reflected_object = RenderedObjectIndex(reflection_intersections);
+		
+		if (index_of_reflected_object != -1) {
+			//nothing to reflect:
+			if (reflection_intersections.at(index_of_reflected_object) > rounderror) {
+				Vect reflection_intersection_position = intersection_position + (reflection_direction * reflection_intersections.at(index_of_reflected_object));
+				Vect reflection_intersection_ray_direction = reflection_direction;
+				
+				Color reflection_intersection_color = getColorAt(
+					reflection_intersection_position, reflection_intersection_ray_direction,
+					scene_graph, index_of_reflected_object, scene_lights, rounderror, ambientlight
+				);
+				
+				final_color = final_color + (reflection_intersection_color * rendered_object_color.special());
+			}
+		}
+	}
+	
 	for (int i = 0; i < scene_lights.size(); i++) {
-		Vect light_direction = (scene_lights.at(i)->getPosition() - intersection_position).normalized();
+		Vect light_direction = (scene_lights.at(i)->getDirectionFrom(intersection_position)).normalized();
 		
 		double cos_angle = rendered_object_normal.normalized().dot(light_direction.normalized());
 		
 		if (cos_angle > 0) {
 			bool shadowed = false;
 			
-			double distance_to_light = (scene_lights.at(i)->getPosition() - intersection_position).normalized().magnitude();
+			double distance_to_light = (scene_lights.at(i)->getDirectionFrom(intersection_position)).normalized().magnitude();
 			
-			Ray shadow_feeler(intersection_position, (scene_lights.at(i)->getPosition() - intersection_position).normalized());
+			Ray shadow_feeler(intersection_position, (scene_lights.at(i)->getDirectionFrom(intersection_position)).normalized());
 			
 			vector<double> secondary_intersections;
 			
@@ -177,16 +227,18 @@ void savebmp (const char *filename, int w, int h, int dpi, RGBType *data) {
 	fclose(f);
 }
 
-int curpixel;
-
 int main(int args, char *argv[]) {
 	cout << "Rendering..." << endl;
+	
+	clock_t t1, t2;
+	t1 = clock();
 	
 	int dpi = 72;
 	int width = 640;
 	int height = 480;
 	int pixelcount = width*height;
 	RGBType *pixels = new RGBType[pixelcount];
+	int curpixel;
 	
 	double aspectratio = (double)width/height;
 	double ambientlight = 0.2;
@@ -199,7 +251,7 @@ int main(int args, char *argv[]) {
 	Vect Z(0, 0, 1);
 	
 	//set up camera:
-	Vect campos(3, 1.5, -4);
+	Vect campos(6, 3, -8);
 	Vect look_at(0, 0, 0);
 	Vect camlookdiff = campos - look_at;
 	Vect camdir = (-camlookdiff).normalized();
@@ -214,25 +266,26 @@ int main(int args, char *argv[]) {
 	
 	//set up scene light(s):
 	Vect light_position(-7, 10, -10);
-	PointLight scene_light(light_position, white);
-	//Vect light_position2(7, 10, -10);
-	//PointLight scene_light2(light_position2, white);
+	//PointLight scene_light(light_position, white);
+	DirectionalLight sun(Vect(1,-1,1), Color(1,1,1,0));
 	
 	//push lights to a light source vector:
 	vector<Light*> scene_lights;
-	scene_lights.push_back(dynamic_cast<Light*>(&scene_light));
-	//scene_lights.push_back(dynamic_cast<Light*>(&scene_light2));
+	//scene_lights.push_back(dynamic_cast<Light*>(&scene_light));
+	scene_lights.push_back(dynamic_cast<Light*>(&sun));
 	
 	//scene objects:
-	Sphere sphere(O, 1, Color(0.9, 0.6, 0.1, 0));
-	Plane scene_plane(Y, -1, Color(0.6, 0.1, 0.3, 0));
+	Sphere sphere(O, 1, Color(0.8, 0.5, 0, 0.5));
+	Sphere sphere2(Vect(4,4,4), 2, Color(0.3, 0.7, 0.7, 0.5));
+	Plane scene_plane(Y, -1, Color(0.6, 0.1, 0.3, 2));
 	
 	//push scene objects to scene graph:
 	vector<Object*> scene_graph;
 	scene_graph.push_back(dynamic_cast<Object*>(&sphere));
+	scene_graph.push_back(dynamic_cast<Object*>(&sphere2));
 	scene_graph.push_back(dynamic_cast<Object*>(&scene_plane));
 	
-	double xamnt, yamnt;
+	double xamount, yamount;
 	
 	//pixel rendering:
 	for (int x = 0; x < width; x++) {
@@ -242,22 +295,22 @@ int main(int args, char *argv[]) {
 			//start with no AA
 			if (width > height) {
 				//the image is wider than it is tall
-				xamnt = ((x+0.5)/width)*aspectratio - (((width-height)/(double)height/2));
-				yamnt = ((height - y) + 0.5)/height;
+				xamount = ((x+0.5)/width)*aspectratio - (((width-height)/(double)height/2));
+				yamount = ((height - y) + 0.5)/height;
 			}
 			else if (height > width) {
 				//the image is taller than it is wide
-				xamnt = (x + 0.5)/width;
-				yamnt = (((height - y) + 0.5)/height)/aspectratio - (((height-width)/(double)width/2));
+				xamount = (x + 0.5)/width;
+				yamount = (((height - y) + 0.5)/height)/aspectratio - (((height-width)/(double)width/2));
 			}
 			else {
 				//image is 1:1 aspect ratio
-				xamnt = (x + 0.5)/width;
-				yamnt = ((height - y) + 0.5)/height;
+				xamount = (x + 0.5)/width;
+				yamount = ((height - y) + 0.5)/height;
 			}
 			
 			Vect cam_ray_origin = scene_cam.getCameraPosition();
-			Vect cam_ray_direction = (camdir + (camright * (xamnt - 0.5) + camdown * (yamnt - 0.5))).normalized();
+			Vect cam_ray_direction = (camdir + (camright * (xamount - 0.5) + camdown * (yamount - 0.5))).normalized();
 			
 			Ray cam_ray(cam_ray_origin, cam_ray_direction);
 			
@@ -298,6 +351,13 @@ int main(int args, char *argv[]) {
 	}
 	
 	savebmp("trace.bmp", width, height, dpi, pixels);
+	
+	delete pixels;
+	
+	t2 = clock();
+	float render_time = ((float)t2 - (float)t1)/1000;
+	
+	cout << render_time << " seconds to render." << endl;
 	
 	return 0;
 }

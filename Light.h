@@ -9,14 +9,23 @@ class Light {
 	Color color;
 	
 public:
-	Light();
+	Light(); //defaults to x direction
+	Light(Vect, Color);
 	
 	//method functions:
-	virtual Vect getPosition() { return Vect(0, 0, 0); }
-	virtual Color getColor() { return Color(1, 1, 1, 0); }
+	virtual Vect getDirectionFrom(Vect intersect) { return Vect(0,0,0); }
+	virtual Color getColor() { return Color (1,1,1,0); }
 	
 };
 
-Light::Light () {}
+Light::Light () {
+	position = Vect(0, 0, 0);
+	color = Color(1, 1, 1, 0);
+}
+
+Light::Light (Vect pos, Color col) {
+	position = pos;
+	color = col;
+}
 
 #endif

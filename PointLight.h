@@ -14,7 +14,7 @@ public:
 	PointLight(Vect, Color);
 	
 	//method functions:
-	Vect getPosition() { return position; }
+	Vect getDirectionFrom(Vect intersect) { return (position - intersect); }
 	Color getColor() { return color; }
 	
 };
