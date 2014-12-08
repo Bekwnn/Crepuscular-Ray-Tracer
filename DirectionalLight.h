@@ -1,6 +1,8 @@
 #ifndef DIRECTIONALLIGHT_H
 #define DIRECTIONALLIGHT_H
 
+#include <cfloat>
+
 #include "Vect.h"
 #include "Color.h"
 #include "Light.h"
@@ -14,6 +16,7 @@ public:
 	DirectionalLight(Vect, Color);
 	
 	//method functions:
+	double getDistanceFrom(Vect ignorethis) { return 1; }
 	Vect getDirectionFrom(Vect ignorethis) { return (-direction); }
 	Color getColor() { return color; }
 };

@@ -74,8 +74,11 @@ int RenderedObjectIndex(vector<double> object_intersections) {
 /* gets the color at an intersection */
 Color getColorAt(Vect intersection_position, Vect intersecting_ray_direction,
 				 vector<Object*> scene_graph, int index_of_rendered_object,
-				 vector<Light*> scene_lights, double rounderror, double ambientlight)
+				 vector<Light*> scene_lights, double ambientlight,
+				 int recursion_step)
 {
+	double rounderror = 0.000001;
+	
 	Color rendered_object_color = scene_graph.at(index_of_rendered_object)->getColor();
 	Vect rendered_object_normal = scene_graph.at(index_of_rendered_object)->getNormalAt(intersection_position);
 	
@@ -94,8 +97,10 @@ Color getColorAt(Vect intersection_position, Vect intersecting_ray_direction,
 	
 	Color final_color = rendered_object_color * ambientlight;
 	
+	int recursion_limit = 20;
+	
 	//special value of (0-1] for reflection:
-	if (rendered_object_color.special() > 0 && rendered_object_color.special() <= 1) {
+	if (rendered_object_color.special() > 0 && rendered_object_color.special() <= 1 && recursion_step < recursion_limit) {
 		//reflection of objects with specular:
 		double dot1 = rendered_object_normal.dot(-intersecting_ray_direction);
 		Vect scalar1 = rendered_object_normal * dot1;
@@ -122,7 +127,8 @@ Color getColorAt(Vect intersection_position, Vect intersecting_ray_direction,
 				
 				Color reflection_intersection_color = getColorAt(
 					reflection_intersection_position, reflection_intersection_ray_direction,
-					scene_graph, index_of_reflected_object, scene_lights, rounderror, ambientlight
+					scene_graph, index_of_reflected_object, scene_lights, ambientlight,
+					(recursion_step+1)
 				);
 				
 				final_color = final_color + (reflection_intersection_color * rendered_object_color.special());
@@ -133,12 +139,12 @@ Color getColorAt(Vect intersection_position, Vect intersecting_ray_direction,
 	for (int i = 0; i < scene_lights.size(); i++) {
 		Vect light_direction = (scene_lights.at(i)->getDirectionFrom(intersection_position)).normalized();
 		
-		double cos_angle = rendered_object_normal.normalized().dot(light_direction.normalized());
+		double cos_angle = rendered_object_normal.normalized().dot(light_direction);
 		
 		if (cos_angle > 0) {
 			bool shadowed = false;
 			
-			double distance_to_light = (scene_lights.at(i)->getDirectionFrom(intersection_position)).normalized().magnitude();
+			double distance_to_light = scene_lights.at(i)->getDistanceFrom(intersection_position);
 			
 			Ray shadow_feeler(intersection_position, (scene_lights.at(i)->getDirectionFrom(intersection_position)).normalized());
 			
@@ -230,8 +236,8 @@ void savebmp (const char *filename, int w, int h, int dpi, RGBType *data) {
 int main(int args, char *argv[]) {
 	cout << "Rendering..." << endl;
 	
-	clock_t t1, t2;
-	t1 = clock();
+	clock_t t_start, t_end;
+	t_start = clock();
 	
 	int dpi = 72;
 	int width = 640;
@@ -251,8 +257,8 @@ int main(int args, char *argv[]) {
 	Vect Z(0, 0, 1);
 	
 	//set up camera:
-	Vect campos(6, 3, -8);
-	Vect look_at(0, 0, 0);
+	Vect campos(0, 3, -6);
+	Vect look_at(0, 2, 0);
 	Vect camlookdiff = campos - look_at;
 	Vect camdir = (-camlookdiff).normalized();
 	Vect camright = Y.cross(camdir).normalized();
@@ -265,25 +271,32 @@ int main(int args, char *argv[]) {
 	Color black(0, 0, 0, 0);
 	
 	//set up scene light(s):
-	Vect light_position(-7, 10, -10);
-	//PointLight scene_light(light_position, white);
-	DirectionalLight sun(Vect(1,-1,1), Color(1,1,1,0));
+	PointLight scene_light(Vect(0,2,-2), Color(0.8, 0.1, 0.5, 0));
+	DirectionalLight sun(Vect(0,-1,0), Color(0.1, 0.1, 0.8, 0));
 	
 	//push lights to a light source vector:
 	vector<Light*> scene_lights;
-	//scene_lights.push_back(dynamic_cast<Light*>(&scene_light));
+	scene_lights.push_back(dynamic_cast<Light*>(&scene_light));
 	scene_lights.push_back(dynamic_cast<Light*>(&sun));
 	
 	//scene objects:
-	Sphere sphere(O, 1, Color(0.8, 0.5, 0, 0.5));
-	Sphere sphere2(Vect(4,4,4), 2, Color(0.3, 0.7, 0.7, 0.5));
-	Plane scene_plane(Y, -1, Color(0.6, 0.1, 0.3, 2));
+	Sphere sphere(Vect(-1,0,0), 1, Color(0.8, 0.5, 0, 0.5));
+	Sphere sphere2(Vect(2.5,0.5,2.5), 1, Color(0.3, 0.7, 0.7, 0.5));
+	Plane bot_plane(Y, -1, Color(0.6, 0.1, 0.3, 2));
+	Plane top_plane(-Y, -5, Color(0.6, 0.1, 0.3, 0));
+	Plane back_plane(-Z, -5, Color(0.2, 0.6, 0.2, 0));
+	Plane left_plane(-X, -5, Color(0, 0.4, 0.7, 0));
+	Plane right_plane(X, -5, Color(0, 0.4, 0.7, 0));
 	
 	//push scene objects to scene graph:
 	vector<Object*> scene_graph;
 	scene_graph.push_back(dynamic_cast<Object*>(&sphere));
 	scene_graph.push_back(dynamic_cast<Object*>(&sphere2));
-	scene_graph.push_back(dynamic_cast<Object*>(&scene_plane));
+	scene_graph.push_back(dynamic_cast<Object*>(&bot_plane));
+	scene_graph.push_back(dynamic_cast<Object*>(&top_plane));
+	scene_graph.push_back(dynamic_cast<Object*>(&back_plane));
+	scene_graph.push_back(dynamic_cast<Object*>(&left_plane));
+	scene_graph.push_back(dynamic_cast<Object*>(&right_plane));
 	
 	double xamount, yamount;
 	
@@ -340,7 +353,7 @@ int main(int args, char *argv[]) {
 					Color intersection_color = getColorAt(
 						intersection_position, intersecting_ray_direction,
 						scene_graph, index_of_rendered_object, scene_lights,
-						rounderror, ambientlight);
+						ambientlight, 0);
 					
 					pixels[curpixel].r = intersection_color.red();
 					pixels[curpixel].g = intersection_color.green();
@@ -354,8 +367,8 @@ int main(int args, char *argv[]) {
 	
 	delete pixels;
 	
-	t2 = clock();
-	float render_time = ((float)t2 - (float)t1)/1000;
+	t_end = clock();
+	float render_time = ((float)t_end - (float)t_start)/1000;
 	
 	cout << render_time << " seconds to render." << endl;
 	
