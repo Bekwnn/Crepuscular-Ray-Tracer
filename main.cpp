@@ -244,7 +244,9 @@ int main(int args, char *argv[]) {
 	int height = 480;
 	int pixelcount = width*height;
 	RGBType *pixels = new RGBType[pixelcount];
-	int curpixel;
+	
+	int aalevel = 2;
+	int aaseed = 424242;
 	
 	double aspectratio = (double)width/height;
 	double ambientlight = 0.2;
@@ -300,72 +302,113 @@ int main(int args, char *argv[]) {
 	
 	double xamount, yamount;
 	
+	int aalevel2 = aalevel*aalevel;
+	srand(aaseed);	//set seed for pseudorandom AA ray scattering
+	
+	double AARed[aalevel2];
+	double AAGreen[aalevel2];
+	double AABlue[aalevel2];
+	
 	//pixel rendering:
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
-			curpixel = y*width + x;
+			int curpixel = y*width + x;
 			
-			//start with no AA
-			if (width > height) {
-				//the image is wider than it is tall
-				xamount = ((x+0.5)/width)*aspectratio - (((width-height)/(double)height/2));
-				yamount = ((height - y) + 0.5)/height;
-			}
-			else if (height > width) {
-				//the image is taller than it is wide
-				xamount = (x + 0.5)/width;
-				yamount = (((height - y) + 0.5)/height)/aspectratio - (((height-width)/(double)width/2));
-			}
-			else {
-				//image is 1:1 aspect ratio
-				xamount = (x + 0.5)/width;
-				yamount = ((height - y) + 0.5)/height;
-			}
-			
-			Vect cam_ray_origin = scene_cam.getCameraPosition();
-			Vect cam_ray_direction = (camdir + (camright * (xamount - 0.5) + camdown * (yamount - 0.5))).normalized();
-			
-			Ray cam_ray(cam_ray_origin, cam_ray_direction);
-			
-			vector<double> intersections;
-			
-			//loop through each object in the scene for intersections
-			for (int i = 0; i < scene_graph.size(); i++) {
-				intersections.push_back(scene_graph.at(i)->findIntersection(cam_ray));
-			}
-			
-			int index_of_rendered_object = RenderedObjectIndex(intersections);
-			
-			if (index_of_rendered_object == -1) {
-				//background color
-				pixels[curpixel].r = 0.0;
-				pixels[curpixel].g = 0.0;
-				pixels[curpixel].b = 0.0;
-			}
-			else {
-				//get intersected object color
-				if (intersections.at(index_of_rendered_object) > rounderror) {
-				
-					Vect intersection_position = cam_ray_origin +
-						(cam_ray_direction * intersections.at(index_of_rendered_object));
-					Vect intersecting_ray_direction = cam_ray_direction;
+			for(int aax = 0; aax < aalevel; aax++) {
+				for(int aay = 0; aay < aalevel; aay++) {
+					int thisaa_index = aax*aalevel + aay;
 					
-					Color intersection_color = getColorAt(
-						intersection_position, intersecting_ray_direction,
-						scene_graph, index_of_rendered_object, scene_lights,
-						ambientlight, 0);
+					//subpixel offsets, with pseudo-random sub-sub-pixel offsets:
+					double aaxoffset = ((double)aax + 1)/(double)aalevel - 1/(double)(2*aalevel) + fmod(rand(),(1/(double)aalevel));
+					double aayoffset = ((double)aay + 1)/(double)aalevel - 1/(double)(2*aalevel) + fmod(rand(),(1/(double)aalevel));
 					
-					pixels[curpixel].r = intersection_color.red();
-					pixels[curpixel].g = intersection_color.green();
-					pixels[curpixel].b = intersection_color.blue();
-				}
+					if (width > height) {
+						//the image is wider than it is tall
+						xamount = ((x + aaxoffset)/width)*aspectratio - (((width-height)/(double)height/2));
+						yamount = (height - y + aayoffset)/height;
+					}
+					else if (height > width) {
+						//the image is taller than it is wide
+						xamount = (x + aaxoffset)/width;
+						yamount = ((height - y + aayoffset)/height)/aspectratio - (((height-width)/(double)width/2));
+					}
+					else {
+						//image is 1:1 aspect ratio
+						xamount = (x + aaxoffset)/width;
+						yamount = (height - y + aayoffset)/height;
+					}
+					
+					Vect cam_ray_origin = scene_cam.getCameraPosition();
+					Vect cam_ray_direction = (camdir + (camright * (xamount - 0.5) + camdown * (yamount - 0.5))).normalized();
+					
+					Ray cam_ray(cam_ray_origin, cam_ray_direction);
+					
+					vector<double> intersections;
+					
+					//loop through each object in the scene for intersections
+					for (int i = 0; i < scene_graph.size(); i++) {
+						intersections.push_back(scene_graph.at(i)->findIntersection(cam_ray));
+					}
+					
+					int index_of_rendered_object = RenderedObjectIndex(intersections);
+					
+					if (index_of_rendered_object == -1) {
+						//background color
+						AARed[thisaa_index] = 0.0;
+						AAGreen[thisaa_index] = 0.0;
+						AABlue[thisaa_index] = 0.0;
+					}
+					else {
+						//get intersected object color
+						if (intersections.at(index_of_rendered_object) > rounderror) {
+						
+							Vect intersection_position = cam_ray_origin +
+								(cam_ray_direction * intersections.at(index_of_rendered_object));
+							Vect intersecting_ray_direction = cam_ray_direction;
+							
+							Color intersection_color = getColorAt(
+								intersection_position, intersecting_ray_direction,
+								scene_graph, index_of_rendered_object, scene_lights,
+								ambientlight, 0);
+							
+							AARed[thisaa_index] = intersection_color.red();
+							AAGreen[thisaa_index] = intersection_color.green();
+							AABlue[thisaa_index] = intersection_color.blue();
+						}
+					}
+				} //end of AA inner loop
+			} //end of AA outer loop
+			
+			//average red AA rays:
+			double red_average = 0.0;
+			for (int r = 0; r < aalevel2; r++) {
+				red_average += AARed[r];
 			}
-		}
-	}
+			red_average = red_average/aalevel2;
+			
+			//average green AA rays:
+			double green_average = 0.0;
+			for (int g = 0; g < aalevel2; g++) {
+				green_average += AAGreen[g];
+			}
+			green_average = green_average/aalevel2;
+			
+			//average blue AA rays:
+			double blue_average = 0.0;
+			for (int b = 0; b < aalevel2; b++) {
+				blue_average += AABlue[b];
+			}
+			blue_average = blue_average/aalevel2;
+			
+			pixels[curpixel].r = AARed[0];
+			pixels[curpixel].g = AAGreen[0];
+			pixels[curpixel].b = AABlue[0];
+		} //end of pixel inner loop
+	} //end of pixel outer loop
 	
-	savebmp("trace.bmp", width, height, dpi, pixels);
+	savebmp("trace_2xAA.bmp", width, height, dpi, pixels);
 	
-	delete pixels;
+	delete pixels, AARed, AAGreen, AABlue;
 	
 	t_end = clock();
 	float render_time = ((float)t_end - (float)t_start)/1000;
