@@ -30,7 +30,7 @@ struct RGBType {
 };
 
 /*performs 4(3) bit shifts on ints and casts them to unsigned char
- *in 4 subsequent addresses in a header */
+ *in 4 subsequent addresses in a header - Used for file creation */
 void setfourblock(int data, unsigned char *header) {
 	for (int i = 0; i < 4; i++) {
 		*(header + i) = (unsigned char)(data>>(i*8));
@@ -43,7 +43,7 @@ int RenderedObjectIndex(vector<double> object_intersections) {
 	//return the index of the minimum value
 	int index_of_minimum_value;
 	
-	//check case of size 0 and size 1:
+	//check case of size 0 and size 1 to speed things up a bit:
 	if (object_intersections.size() == 0) {
 		return -1;
 	}
@@ -77,7 +77,7 @@ Color getColorAt(Vect intersection_position, Vect intersecting_ray_direction,
 				 vector<Light*> scene_lights, double ambientlight,
 				 int recursion_step)
 {
-	double rounderror = 0.000001;
+	double rounderror = 0.000001;	//used at some intersections
 	
 	Color rendered_object_color = scene_graph.at(index_of_rendered_object)->getColor();
 	Vect rendered_object_normal = scene_graph.at(index_of_rendered_object)->getNormalAt(intersection_position);
@@ -206,7 +206,7 @@ void savebmp (const char *filename, int w, int h, int dpi, RGBType *data) {
 	bmpfileheader[4] = (unsigned char)(filesize>>16);
 	bmpfileheader[5] = (unsigned char)(filesize>>24);
 	
-	//set some similar four address blocks by bitshifting ints
+	//set some similar four address blocks by bitshifting 32ints into unsigned chars
 	setfourblock(w, &bmpinfoheader[4]);
 	setfourblock(h, &bmpinfoheader[8]);
 	setfourblock(s, &bmpinfoheader[21]);
@@ -240,39 +240,39 @@ int main(int args, char *argv[]) {
 	t_start = clock();
 	
 	int dpi = 72;
-	int width = 640;
-	int height = 480;
+	int width = 1600;
+	int height = 900;
 	int pixelcount = width*height;
 	RGBType *pixels = new RGBType[pixelcount];
 	
-	int aalevel = 2;
-	int aaseed = 424242;
+	int aalevel = 1;		//1 = no AA, 2 = 4 rays per pixel, 3 = 9, etc
+	int aaseed = 424242;	//chosen arbitrarily
 	
 	double aspectratio = (double)width/height;
 	double ambientlight = 0.2;
 	double rounderror = 0.000001;
-	
-	//establishing base vectors
-	Vect O(0, 0, 0);
-	Vect X(1, 0, 0);
-	Vect Y(0, 1, 0);
-	Vect Z(0, 0, 1);
-	
-	//set up camera:
-	Vect campos(0, 3, -6);
-	Vect look_at(0, 2, 0);
-	Vect camlookdiff = campos - look_at;
-	Vect camdir = (-camlookdiff).normalized();
-	Vect camright = Y.cross(camdir).normalized();
-	Vect camdown = camright.cross(camdir);
-	Camera scene_cam(campos, camdir, camright, camdown);
 	
 	//establish some basic colors:
 	Color white(1.0, 1.0, 1.0, 0);
 	Color gray(0.5, 0.5, 0.5, 0);
 	Color black(0, 0, 0, 0);
 	
-	//set up scene light(s):
+	//establishing base vectors
+	Vect Zero(0, 0, 0);
+	Vect X(1, 0, 0);
+	Vect Y(0, 1, 0);
+	Vect Z(0, 0, 1);
+	
+	//set up camera:
+	Vect camera_position(0, 3, -6);
+	Vect look_at(0, 2, 0);
+	Vect camlookdiff = camera_position - look_at;
+	Vect camdir = (-camlookdiff).normalized();
+	Vect camright = Y.cross(camdir).normalized();
+	Vect camdown = camright.cross(camdir);
+	Camera scene_cam(camera_position, camdir, camright, camdown);
+	
+	//create scene light(s):
 	PointLight scene_light(Vect(0,2,-2), Color(0.8, 0.1, 0.5, 0));
 	DirectionalLight sun(Vect(0,-1,0), Color(0.1, 0.1, 0.8, 0));
 	
@@ -281,7 +281,7 @@ int main(int args, char *argv[]) {
 	scene_lights.push_back(dynamic_cast<Light*>(&scene_light));
 	scene_lights.push_back(dynamic_cast<Light*>(&sun));
 	
-	//scene objects:
+	//create scene objects:
 	Sphere sphere(Vect(-1,0,0), 1, Color(0.8, 0.5, 0, 0.5));
 	Sphere sphere2(Vect(2.5,0.5,2.5), 1, Color(0.3, 0.7, 0.7, 0.5));
 	Plane bot_plane(Y, -1, Color(0.6, 0.1, 0.3, 2));
@@ -353,7 +353,7 @@ int main(int args, char *argv[]) {
 					int index_of_rendered_object = RenderedObjectIndex(intersections);
 					
 					if (index_of_rendered_object == -1) {
-						//background color
+						//define background color, if you wish:
 						AARed[thisaa_index] = 0.0;
 						AAGreen[thisaa_index] = 0.0;
 						AABlue[thisaa_index] = 0.0;
@@ -379,21 +379,21 @@ int main(int args, char *argv[]) {
 				} //end of AA inner loop
 			} //end of AA outer loop
 			
-			//average red AA rays:
+			//average the red AA rays:
 			double red_average = 0.0;
 			for (int r = 0; r < aalevel2; r++) {
 				red_average += AARed[r];
 			}
 			red_average = red_average/aalevel2;
 			
-			//average green AA rays:
+			//average the green AA rays:
 			double green_average = 0.0;
 			for (int g = 0; g < aalevel2; g++) {
 				green_average += AAGreen[g];
 			}
 			green_average = green_average/aalevel2;
 			
-			//average blue AA rays:
+			//average the blue AA rays:
 			double blue_average = 0.0;
 			for (int b = 0; b < aalevel2; b++) {
 				blue_average += AABlue[b];
@@ -406,14 +406,15 @@ int main(int args, char *argv[]) {
 		} //end of pixel inner loop
 	} //end of pixel outer loop
 	
-	savebmp("trace_2xAA.bmp", width, height, dpi, pixels);
+	//SET FILE NAME HERE, FILES WILL BE OVERWRITTEN BY THIS:
+	savebmp("trace_NOAA.bmp", width, height, dpi, pixels);
 	
 	delete pixels, AARed, AAGreen, AABlue;
 	
 	t_end = clock();
 	float render_time = ((float)t_end - (float)t_start)/1000;
 	
-	cout << render_time << " seconds to render." << endl;
+	cout << render_time << " seconds to render." << endl;	//gives incorrect time on some operating systems
 	
 	return 0;
 }
