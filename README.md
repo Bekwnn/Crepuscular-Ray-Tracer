@@ -1,4 +1,4 @@
-[Sample Raytrace Image]()
+[Sample Raytrace Image](http://a.pomf.se/rlrsvr.bmp)
 
 ** GOALS COMPLETED: **
 
