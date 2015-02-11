@@ -1,5 +1,7 @@
 ** GOALS COMPLETED: **
 
+[Sample Raytrace Image]()
+
 Advanced Rendering:
 - Put the sphere inside a room-like space and render the 5 visible walls with different colors
 - Put more than one light source of a different type
